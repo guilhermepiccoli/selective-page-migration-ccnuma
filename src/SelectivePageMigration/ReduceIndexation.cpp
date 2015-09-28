@@ -1,3 +1,26 @@
+/* *********************************************************************
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Lesser General Public License as
+ * published by the Free Software Foundation, version 3 of the License.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Lesser General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * AND the GNU Lesser General Public License along with this program.
+ * If not, see <http://www.gnu.org/licenses/>.
+ *
+ * Authors of this code:
+ *   Henrique Nazaré Santos  <hnsantos@gmx.com>
+ *   Guilherme G. Piccoli    <porcusbr@gmail.com>
+ *
+ * Publication:
+ *   Compiler support for selective page migration in NUMA
+ *   architectures. PACT 2014: 369-380.
+ *   <http://dx.doi.org/10.1145/2628071.2628077>
+********************************************************************* */
 #include "ReduceIndexation.h"
 
 #include "llvm/Support/CommandLine.h"
@@ -7,9 +30,9 @@
 /* ************************************************************************** */
 
 static cl::opt<bool>
-  ClDebug("reduce-indexation-debug",
+  ClDebug( "reduce-indexation-debug",
           cl::desc("Enable debugging for the GEP reduction pass"),
-          cl::Hidden, cl::init(false));
+          cl::Hidden, cl::init(false) );
 
 static RegisterPass<ReduceIndexation>
   X("reduce-indexation", "Reduces GEPs to a base pointer and symbolic offset");

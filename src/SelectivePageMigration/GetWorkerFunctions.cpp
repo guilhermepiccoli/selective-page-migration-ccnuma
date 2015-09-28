@@ -21,34 +21,27 @@
  *   architectures. PACT 2014: 369-380.
  *   <http://dx.doi.org/10.1145/2628071.2628077>
 ********************************************************************* */
-#ifndef _REDUCEINDEXATION_H_
-#define _REDUCEINDEXATION_H_
+#include "GetWorkerFunctions.h"
 
-#include "Expr.h"
-#include "LoopInfoExpr.h"
+static RegisterPass<GetWorkerFunctions> Z("GWF", "GetWorkerFunctions", false, true);
+char GetWorkerFunctions::ID = 0;
 
-#include "llvm/Pass.h"
-#include "llvm/IR/DataLayout.h"
-#include "llvm/IR/Instructions.h"
+bool GetWorkerFunctions::runOnModule(Module &M) {
+	Module::iterator B,E;
 
-class ReduceIndexation : public FunctionPass {
-public:
-  static char ID;
-  ReduceIndexation() : FunctionPass(ID) { }
+	for (B = M.begin(),E = M.end(); B != E; ++B) {
+		for (Function::iterator B_f = (*B).begin(), E_f = (*B).end(); B_f != E_f; ++B_f) {
+			for (BasicBlock::iterator B_b = (*B_f).begin(), E_b = (*B_f).end(); B_b != E_b; ++B_b) {
+				if ( CallInst* callInst = dyn_cast<CallInst>(&*B_b) ) {
 
-  virtual void getAnalysisUsage(AnalysisUsage &AU) const;
-  virtual bool runOnFunction(Function &F);
-
-  bool reduceStore(StoreInst *SI, Value *&Array, Expr &Offset) const;
-  bool reduceLoad(LoadInst *LI, Value *&Array, Expr &Offset)   const;
-  bool reduceGetElementPtr(GetElementPtrInst *GEP, Value *&Array,
-                           Expr &Offset) const;
-  bool reduceMemoryOp(Value *V, Value *&Array, Expr& Offset)   const;
-
-private:
-  DataLayout *DL_;
-  LoopInfoExpr *LIE_;
-};
-
-#endif
-
+					if (callInst->getCalledFunction() != nullptr)
+						if ( callInst->getCalledFunction()->getName() == "pthread_create") {
+							Value *val = (*callInst).getArgOperand(2); 
+							GetWorkerFunctions::workers.insert(  ( (*val).getName() ).str()  );
+						}
+				}
+			}
+		}
+	}
+	return false;
+}

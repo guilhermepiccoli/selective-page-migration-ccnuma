@@ -21,34 +21,32 @@
  *   architectures. PACT 2014: 369-380.
  *   <http://dx.doi.org/10.1145/2628071.2628077>
 ********************************************************************* */
-#ifndef _REDUCEINDEXATION_H_
-#define _REDUCEINDEXATION_H_
-
-#include "Expr.h"
-#include "LoopInfoExpr.h"
+#ifndef _GETWORKERFUNCTIONS_H_
+#define _GETWORKERFUNCTIONS_H_
 
 #include "llvm/Pass.h"
-#include "llvm/IR/DataLayout.h"
+#include "llvm/IR/Module.h"
+#include "llvm/IR/BasicBlock.h"
 #include "llvm/IR/Instructions.h"
+#include "llvm/IR/Value.h"
 
-class ReduceIndexation : public FunctionPass {
+#include <set>
+#include <string>
+
+using namespace llvm;
+
+class GetWorkerFunctions : public ModulePass {
 public:
-  static char ID;
-  ReduceIndexation() : FunctionPass(ID) { }
+	static char ID;
+	GetWorkerFunctions() : ModulePass(ID) { }
 
-  virtual void getAnalysisUsage(AnalysisUsage &AU) const;
-  virtual bool runOnFunction(Function &F);
+	virtual void getAnalysisUsage(AnalysisUsage &AU) const {
+		AU.setPreservesAll();
+	}
 
-  bool reduceStore(StoreInst *SI, Value *&Array, Expr &Offset) const;
-  bool reduceLoad(LoadInst *LI, Value *&Array, Expr &Offset)   const;
-  bool reduceGetElementPtr(GetElementPtrInst *GEP, Value *&Array,
-                           Expr &Offset) const;
-  bool reduceMemoryOp(Value *V, Value *&Array, Expr& Offset)   const;
+	virtual bool runOnModule(Module &M);
 
-private:
-  DataLayout *DL_;
-  LoopInfoExpr *LIE_;
+	std::set<std::string> workers;
 };
 
 #endif
-
