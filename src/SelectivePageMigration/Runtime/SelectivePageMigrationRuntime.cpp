@@ -1,3 +1,27 @@
+/* *********************************************************************
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Lesser General Public License as
+ * published by the Free Software Foundation, version 3 of the License.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Lesser General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * AND the GNU Lesser General Public License along with this program.
+ * If not, see <http://www.gnu.org/licenses/>.
+ *
+ * Authors of this code:
+ *   Henrique Nazaré Santos  <hnsantos@gmx.com>
+ *   Guilherme G. Piccoli    <porcusbr@gmail.com>
+ *
+ * Publication:
+ *   Compiler support for selective page migration in NUMA
+ *   architectures. PACT 2014: 369-380.
+ *   <http://dx.doi.org/10.1145/2628071.2628077>
+********************************************************************* */
+
 #include <cassert>
 #include <cmath>
 #include <iostream>
@@ -7,11 +31,12 @@
 #include <unordered_set>
 #include <list>
 
-#include <hwloc.h>
+#include "hwloc.h"
 #include <numaif.h>
 #include <sys/syscall.h>
 #include <ctime>
 #include <cstring>
+#include <cstdlib>
 
 #include <pthread.h>
 
@@ -43,8 +68,15 @@ hwloc_topology_t __spm_topo;
 hwloc_bitmap_t __spm_full_cpuset;
 unsigned long __spm_cache_size = 0;
 
+//thread distribution mechanism
+hwloc_bitmap_t* __spm_nodes;
+int __spm_num_nodes;
+int __spm_current_node;
+
+static std::mutex __spm_lock;
+
 /*
-typedef struct 
+typedef struct
 	{
 		int from;
 		int to;
@@ -56,25 +88,24 @@ typedef std::unordered_map<long, NodeList> PageMap;
 PageMap page_log;
 
 void clear_map(PageMap *map) {
-	
-	PageMap::iterator it_e = map->end(); 
+
+	PageMap::iterator it_e = map->end();
 	for (PageMap::iterator it = map->begin(); it!=it_e; ++it) {
-		
+
 		NodeList::iterator list_it_e = (*it).second.end();
 		for (NodeList::iterator list_it = (*it).second.begin(); list_it!=list_it_e; ++list_it)
 			delete (*list_it);
-		
+
 		(*it).second.clear();
 	}
-	
 	map->clear();
 }
 
 
 void add_page_to_set(long page, PageMap *map, int node_from, int node_to) {
 	PageMap::iterator it = map->find(page);
-	
-	
+
+
 	if ( it == map->end() ) {
 		NodeList tmp_nl;
 		std::pair<long,NodeList> tmp_pair (page,tmp_nl);
@@ -92,12 +123,12 @@ void add_page_to_set(long page, PageMap *map, int node_from, int node_to) {
 
 
 void print_log(PageMap *map) {
-	
+
 	FILE *fp;
 	time_t time_st;
 	struct tm *now;
 	char fname[100] = {0};
-	
+
 	const char lbreak[] = {'\n',0};
 
 	time (&time_st);
@@ -106,26 +137,26 @@ void print_log(PageMap *map) {
 	strcat(strcat(fname,"page_log_"),asctime(now));
 	char *lame = strstr(fname,lbreak);
 	(*lame) = 0;
-	
+
 	fp = fopen(fname,"w");
 	if (fp != NULL) {
-				
+
 		fprintf(fp,"------------------------------ (num_of_pages=%ld)\n",map->size());
 		PageMap::iterator it_e = map->end();
-		
+
 		for (PageMap::iterator it = map->begin(); it!=it_e; ++it) {
 			//fprintf(fp,"\n%ld",(*it).first);
-		
+
 			NodeList::iterator lst_it_e = (*it).second.end();
 			for (NodeList::iterator lst_it = (*it).second.begin(); lst_it!=lst_it_e; ++lst_it)
 				fprintf( fp,"\n%ld; %d; %d",(*it).first, (*lst_it)->from,(*lst_it)->to ); //; =if(indirect(address(row(),column()-2))=indirect(address(row(),column()-1)),0,1)
-			
+
 			fflush(fp);
 		}
 
 		fclose(fp);
 	}
-	
+
 	else {
 		printf("Error opening file to log page migrations\n\n");
 	}
@@ -275,27 +306,27 @@ void migrate(long PageStart, long PageEnd) {
 	hwloc_get_last_cpu_location(__spm_topo, set, HWLOC_CPUBIND_THREAD);
 
 	hwloc_bitmap_singlify(set);
-	
+
 /*
 	hwloc_nodeset_t nodeset = hwloc_bitmap_alloc();
-		
+
 	hwloc_cpuset_to_nodeset(__spm_topo, set, nodeset);
-	
+
 	char set_str[15] = {0};
 	hwloc_bitmap_snprintf(set_str,14,(hwloc_const_bitmap_t)nodeset);
-	
+
 	uint64_t set_num = strtoull(set_str,NULL,16);
 	int nto=-1, nfrom=-1;
-	
+
 	for (nfrom=0; set_num != 1; ++nfrom) //log2
 		set_num >>= 1;
-	
+
 	//nfrom %= 8;
 
 	long remainder = (long)( (PageStart << PAGE_EXP) & (PAGE_SIZE-1) );
 	long page = (long)( (PageStart << PAGE_EXP) - remainder );
 	long len = (PageEnd - PageStart) + remainder;
-*/		
+*/
 	assert(
 			hwloc_set_area_membind(__spm_topo, (const void*)(PageStart << PAGE_EXP),
 								  (PageEnd - PageStart) << PAGE_EXP,
@@ -316,16 +347,16 @@ SPMPILock.unlock();
 			add_page_to_set(page+j,&page_log,nfrom,nto);
 		SPMPILock.unlock();
 	}
-	
+
 	hwloc_bitmap_free(nodeset);
-*/	
+*/
 	hwloc_bitmap_free(set);
 }
 
 
 void __spm_init() {
   SPMR_DEBUG(std::cout << "Runtime: initialize\n");
-  
+
   hwloc_topology_init(&__spm_topo);
   hwloc_topology_load(__spm_topo);
 
@@ -338,14 +369,34 @@ void __spm_init() {
 	__spm_full_cpuset = hwloc_bitmap_alloc();
 	hwloc_get_cpubind(__spm_topo, __spm_full_cpuset, HWLOC_CPUBIND_PROCESS);
 
+////////////////////////////////////////////////////////////////////////
+	__spm_num_nodes = hwloc_get_nbobjs_by_type (__spm_topo, HWLOC_OBJ_NODE);
+	__spm_current_node = -1;
+
+
+	__spm_nodes = (hwloc_bitmap_t*)malloc(__spm_num_nodes*sizeof(hwloc_bitmap_t));
+	if (__spm_nodes == NULL) {
+		printf("\nOOOOOPPPSSSSSS....\n");
+		exit(99);
+	}
+
+	for (int i=0; i<__spm_num_nodes; ++i) {
+		obj = hwloc_get_obj_by_type (__spm_topo, HWLOC_OBJ_NODE, i);
+		__spm_nodes[i] = hwloc_bitmap_alloc();
+		hwloc_bitmap_copy(__spm_nodes[i], obj->nodeset);
+	}
 }
 
 
 void __spm_end() {
 	SPMR_DEBUG(std::cout << "Runtime: end\n");
 	//printf("\n\ncount=%lu\n",count);
-	
+
 	hwloc_bitmap_free(__spm_full_cpuset);
+
+	for (int i=0; i<__spm_num_nodes; ++i)
+		hwloc_bitmap_free(__spm_nodes[i]);
+	free(__spm_nodes);
 
 	hwloc_topology_destroy(__spm_topo);
 /*
@@ -356,23 +407,41 @@ void __spm_end() {
 
 
 void __spm_thread_lock() {
+/*
+	char last_node[100];
+*/
 
 	hwloc_bitmap_t _cpuset_ = hwloc_bitmap_alloc();
-	
+/*
 	hwloc_get_cpubind(__spm_topo, _cpuset_, HWLOC_CPUBIND_THREAD);
 	hwloc_get_last_cpu_location(__spm_topo, _cpuset_, HWLOC_CPUBIND_THREAD);
 
 	hwloc_bitmap_singlify(_cpuset_);
-	
+
 	hwloc_nodeset_t _nodeset_ = hwloc_bitmap_alloc();
-	
-	hwloc_cpuset_to_nodeset(__spm_topo, _cpuset_, _nodeset_); //from the cpuset with a single CPU, we get the node 
+
+	hwloc_cpuset_to_nodeset(__spm_topo, _cpuset_, _nodeset_); //from the cpuset with a single CPU, we get the node
+
 	hwloc_cpuset_from_nodeset(__spm_topo, _cpuset_, _nodeset_);//from the node, we get all CPUs on that node
+*/
+
+	int k;
+	__spm_lock.lock();
+		__spm_current_node = (__spm_current_node + 1)%__spm_num_nodes;
+		k = __spm_current_node;
+	__spm_lock.unlock();
+
+	hwloc_cpuset_from_nodeset(__spm_topo, _cpuset_, __spm_nodes[k]); //from one node, we get all CPUs on that
 
 	hwloc_set_thread_cpubind(__spm_topo, (hwloc_thread_t)pthread_self(), (hwloc_const_cpuset_t)_cpuset_, HWLOC_CPUBIND_THREAD);
-	
+
+/*
+	hwloc_bitmap_snprintf(last_node, 100, /*_nodeset_*/__spm_nodes[k]);
+	//printf("\n[tid=%08x] node=%s\n",pthread_self(),last_node);
+*/
+
 	hwloc_bitmap_free(_cpuset_);
-	hwloc_bitmap_free(_nodeset_);
+	//hwloc_bitmap_free(_nodeset_);
 }
 
 
@@ -407,7 +476,7 @@ void __spm_get(void *Ary, long Start, long End, long Reuse) {
 
 		SPMPILock.lock();
 		auto It = SPMPI.insert(PageStart, PageEnd, Idx);
-		
+
 		if (It == SPMPI.end()) {
 			SPMPILock.unlock();
 			return;
