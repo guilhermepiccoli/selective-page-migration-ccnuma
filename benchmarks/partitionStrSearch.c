@@ -222,7 +222,6 @@ int main (int argc, char *argv[]) {
 
   if (argc != 5) {
     fprintf(stderr, "Syntax: %s num_threads array_size num_queries initparallel\n", argv[0]);
-    fprintf(stderr, "- num_points >> num_K\n");
     return -1;
   } else {
 
